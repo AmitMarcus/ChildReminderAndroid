@@ -2,11 +2,16 @@ package org.childreminder;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.le.BluetoothLeScanner;
+import android.bluetooth.le.ScanCallback;
+import android.bluetooth.le.ScanResult;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.ParcelUuid;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
@@ -17,6 +22,29 @@ import android.view.MenuItem;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
+    private void startScan() {
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
+        // scan for devices
+        scanner.startScan(new ScanCallback() {
+            @Override
+            public void onScanResult(int callbackType, ScanResult result) {
+                // get the discovered device as you wish
+                // this will trigger each time a new device is found
+
+                BluetoothDevice device = result.getDevice();
+                TextView tv1 = (TextView)findViewById(R.id.textView1);
+
+                String deviceName = device.getName();
+
+                if (deviceName != null && deviceName.equals("Project Zero")) {
+                    tv1.setText("# Found device! " + deviceName + " " + Integer.toString(result.getRssi()));
+                }
+            }
+        });
+    }
+
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
@@ -25,24 +53,8 @@ public class MainActivity extends AppCompatActivity {
                 final int bluetoothState = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
                 switch (bluetoothState) {
                     case BluetoothAdapter.STATE_ON:
-                        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-                        mBluetoothAdapter.startDiscovery();
+                        startScan();
                         break;
-                }
-            } else if (BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)) {
-                //discovery starts, we can show progress dialog or perform other tasks
-            } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action)) {
-                //discovery finishes, dismis progress dialog
-            } else if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                //bluetooth device found
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-
-                TextView tv1 = (TextView)findViewById(R.id.textView1);
-
-                String deviceName = device.getName();
-
-                if (deviceName != null && deviceName.equals("Project Zero")) {
-                    tv1.setText("Found device! " + deviceName);
                 }
             }
         }
@@ -70,15 +82,12 @@ public class MainActivity extends AppCompatActivity {
         if (mBluetoothAdapter != null) {
             IntentFilter filter = new IntentFilter();
 
-            filter.addAction(BluetoothDevice.ACTION_FOUND);
-//            filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED);
-//            filter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
             filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
 
             registerReceiver(mReceiver, filter);
 
             if (mBluetoothAdapter.isEnabled()) {
-                mBluetoothAdapter.startDiscovery();
+                startScan();
             } else {
                 mBluetoothAdapter.enable();
             }
@@ -86,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
             TextView tv1 = (TextView)findViewById(R.id.textView1);
             tv1.setText("NULL");
         }
+
 
     }
 
