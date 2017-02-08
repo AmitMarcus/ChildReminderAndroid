@@ -22,6 +22,10 @@ import android.view.MenuItem;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity {
+    private boolean isChildSitted = false;
+    int lastUpdated = 0;
+    boolean shouldDisableBT = false;
+
     private void startScan() {
         BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
@@ -38,31 +42,40 @@ public class MainActivity extends AppCompatActivity {
 
                 String deviceName = device.getName();
 
-                if (deviceName != null && deviceName.equals("Project Zero")) {
-                    tv1.setText("# Found device! " + deviceName + " " + Integer.toString(result.getRssi()));
+                if (deviceName != null && deviceName.equals("Child Reminder")) {
+                    if (result.getScanRecord().getBytes()[22] == 0) {
+                        tv1.setText("# Child is sitting in the car! " + Integer.toString(result.getRssi()));
+                    } else {
+                        tv1.setText("# No child is sitting in the car! " + Integer.toString(result.getRssi()));
+                    }
                 }
             }
         });
     }
-
-    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
-        public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-
-            if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
-                final int bluetoothState = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-                switch (bluetoothState) {
-                    case BluetoothAdapter.STATE_ON:
-                        startScan();
-                        break;
-                }
-            }
-        }
-    };
+//
+//    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
+//        public void onReceive(Context context, Intent intent) {
+//            String action = intent.getAction();
+//
+//            if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
+//                final int bluetoothState = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
+//                switch (bluetoothState) {
+//                    case BluetoothAdapter.STATE_ON:
+//                        startScan();
+//                        break;
+//                }
+//            }
+//        }
+//    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        Intent mServiceIntent = new Intent(this, MainService.class);
+//        mServiceIntent.setData(Uri.parse(dataUrl));
+        startService(mServiceIntent);
+
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
@@ -75,26 +88,27 @@ public class MainActivity extends AppCompatActivity {
                         .setAction("Action", null).show();
             }
         });
+//
+//        System.exit(1);
 
-
-
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (mBluetoothAdapter != null) {
-            IntentFilter filter = new IntentFilter();
-
-            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-
-            registerReceiver(mReceiver, filter);
-
-            if (mBluetoothAdapter.isEnabled()) {
-                startScan();
-            } else {
-                mBluetoothAdapter.enable();
-            }
-        } else {
-            TextView tv1 = (TextView)findViewById(R.id.textView1);
-            tv1.setText("NULL");
-        }
+//        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+//        if (mBluetoothAdapter != null) {
+//            IntentFilter filter = new IntentFilter();
+//
+//            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+//
+//            registerReceiver(mReceiver, filter);
+//
+//            if (mBluetoothAdapter.isEnabled()) {
+//                startScan();
+//            } else {
+//                shouldDisableBT = true;
+//                mBluetoothAdapter.enable();
+//            }
+//        } else {
+//            TextView tv1 = (TextView)findViewById(R.id.textView1);
+//            tv1.setText("NULL");
+//        }
 
 
     }
@@ -123,11 +137,11 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onDestroy() {
-        // TODO: disable only if we enabled the BT
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        mBluetoothAdapter.disable();
-
-        unregisterReceiver(mReceiver);
+//        // TODO: disable only if we enabled the BT
+//        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+//        mBluetoothAdapter.disable();
+//
+//        unregisterReceiver(mReceiver);
 
         super.onDestroy();
     }
