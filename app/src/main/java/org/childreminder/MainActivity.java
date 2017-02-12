@@ -88,6 +88,10 @@ public class MainActivity extends AppCompatActivity {
                         .setAction("Action", null).show();
             }
         });
+
+        Intent intent = getIntent();
+        TextView tv1 = (TextView)findViewById(R.id.textView1);
+        tv1.setText(Long.toString(intent.getLongExtra("lastUpdated", 0)));
 //
 //        System.exit(1);
 

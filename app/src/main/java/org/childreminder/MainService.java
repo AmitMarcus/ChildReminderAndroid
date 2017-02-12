@@ -15,6 +15,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.MediaPlayer;
+import android.support.v4.app.NotificationCompat;
 import android.widget.TextView;
 
 public class MainService extends IntentService {
@@ -47,11 +48,11 @@ public class MainService extends IntentService {
         PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
 
         Notification notification = new Notification.Builder(this)
-                .setContentTitle("Child Remainder Service")
+                .setContentTitle("Child Reminder Service")
                 .setContentText(msg)
                 .setSmallIcon(R.drawable.baby)
                 .setContentIntent(pendingIntent)
-                .setTicker("TICKER")
+//                .setTicker("Child Reminder")
                 .build();
 
         startForeground(1, notification);
@@ -127,9 +128,9 @@ public class MainService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent workIntent) {
-        goForeground("No connection.");
-
         while (true) {
+            goForeground("No connection.");
+
             checkChildStatus();
 
             try {
@@ -141,27 +142,27 @@ public class MainService extends IntentService {
             // TODO: change time to > than sleep time (e.g. 15000)
             if (isChildSitted && (System.currentTimeMillis() - lastUpdated) > 5000) {
                 Intent intent = new Intent(this, MainActivity.class);
-                PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, 0);
+//                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                intent.putExtra("lastUpdated", lastUpdated);
+                PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
 
-                // build notif  ication
-                // the addAction re-use the same intent to keep the example short
+//                NotificationCompat.Action action = new NotificationCompat.Action.Builder(R.drawable.icon, "NO", pIntent).build();
+
+                // Notify the user of missing child
                 Notification n  = new Notification.Builder(this)
-                        .setContentTitle("New mail from " + "test@gmail.com")
-                        .setContentText("Subject")
+                        .setContentTitle("Forgot something?")
+                        .setContentText("Where is your child?")
                         .setContentIntent(pIntent)
                         .setSmallIcon(R.drawable.icon)
+//                        .addAction(action)
                         .setAutoCancel(true).build();
 
                 NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
                 notificationManager.notify(0, n);
 
-                Intent dialogIntent = new Intent(this, MainActivity.class);
-                dialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(dialogIntent);
-
                 MediaPlayer player = MediaPlayer.create(this, R.raw.alarm);
                 player.setVolume(100,100);
-                player.start();
+//                player.start();
             }
         }
 
@@ -170,32 +171,7 @@ public class MainService extends IntentService {
     }
 }
 
-
-//        while (true) {
-//                try {
-//                Thread.sleep(5000);
-//                } catch (InterruptedException e) {
-//                e.printStackTrace();
-//                }
-//
-//                // prepare intent which is triggered if the
-//                // notification is selected
-//
-//                Intent intent = new Intent(this, MainActivity.class);
-//        PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, 0);
-//
-//        // build notif  ication
-//        // the addAction re-use the same intent to keep the example short
-//        Notification n  = new Notification.Builder(this)
-//        .setContentTitle("New mail from " + "test@gmail.com")
-//        .setContentText("Subject")
-//        .setContentIntent(pIntent)
-//        .setSmallIcon(R.drawable.icon)
-//        .setAutoCancel(true).build();
-//
-//
-//        NotificationManager notificationManager =
-//        (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-//
-//        notificationManager.notify(0, n);
-//        }
+// Start new intent of app's main activity
+//                Intent dialogIntent = new Intent(this, MainActivity.class);
+//                dialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+//                startActivity(dialogIntent);
