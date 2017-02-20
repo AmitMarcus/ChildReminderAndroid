@@ -4,7 +4,6 @@ import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.le.BluetoothLeScanner;
@@ -15,14 +14,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.MediaPlayer;
-import android.support.v4.app.NotificationCompat;
-import android.widget.TextView;
 
 public class MainService extends IntentService {
-    private boolean isChildSitted = false;
-    long lastUpdated = 0;
     boolean shouldDisableBT = false;
-    int lastRssi = 0;
+
+    final static String MY_ACTION = "MY_ACTION";
 
     public MainService() {
         super("MainService");
@@ -52,10 +48,25 @@ public class MainService extends IntentService {
                 .setContentText(msg)
                 .setSmallIcon(R.drawable.baby)
                 .setContentIntent(pendingIntent)
-//                .setTicker("Child Reminder")
                 .build();
 
         startForeground(1, notification);
+    }
+
+    private void changeStatus(ChildReminder.Status status) {
+        ((ChildReminder)getApplicationContext()).status = status;
+
+        switch (((ChildReminder)getApplicationContext()).status) {
+            case NO_CONNECTION:
+                goForeground("No connection.");
+                break;
+            case NO_CHILD_SITTING:
+                goForeground("No child is sitting in the car!");
+                break;
+            case CHILD_SITTING:
+                goForeground("Child is sitting in the car!");
+                break;
+        }
     }
 
     private void startScan() {
@@ -75,22 +86,26 @@ public class MainService extends IntentService {
                 String deviceName = device.getName();
 
                 if (deviceName != null && deviceName.equals("Child Reminder")) {
-                    lastUpdated = System.currentTimeMillis();
-                    lastRssi = result.getRssi();
+                    ((ChildReminder)getApplicationContext()).lastUpdated = System.currentTimeMillis();
+
+                    ((ChildReminder)getApplicationContext()).lastRssi = result.getRssi();
 
                     if (result.getScanRecord().getBytes()[22] == 0) {
-                        isChildSitted = false;
-                        goForeground("No child is sitting in the car!");
+                        changeStatus(ChildReminder.Status.NO_CHILD_SITTING);
                     } else {
-                        isChildSitted = true;
-                        goForeground("Child is sitting in the car!");
+                        changeStatus(ChildReminder.Status.CHILD_SITTING);
                     }
+
+                    Intent intent = new Intent();
+                    intent.setAction(MY_ACTION);
+                    sendBroadcast(intent);
                 }
             }
         });
     }
 
     private void disableBT() {
+        shouldDisableBT = false;
         BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         mBluetoothAdapter.disable();
     }
@@ -128,9 +143,8 @@ public class MainService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent workIntent) {
+        // TODO: check what happen when BT already ON
         while (true) {
-            goForeground("No connection.");
-
             checkChildStatus();
 
             try {
@@ -140,29 +154,33 @@ public class MainService extends IntentService {
             }
 
             // TODO: change time to > than sleep time (e.g. 15000)
-            if (isChildSitted && (System.currentTimeMillis() - lastUpdated) > 5000) {
-                Intent intent = new Intent(this, MainActivity.class);
-//                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                intent.putExtra("lastUpdated", lastUpdated);
-                PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+            if ((System.currentTimeMillis() - ((ChildReminder)getApplicationContext()).lastUpdated) > 5000) {
+                ChildReminder.Status status = ((ChildReminder)getApplicationContext()).status;
 
-//                NotificationCompat.Action action = new NotificationCompat.Action.Builder(R.drawable.icon, "NO", pIntent).build();
+                changeStatus(ChildReminder.Status.NO_CONNECTION);
 
-                // Notify the user of missing child
-                Notification n  = new Notification.Builder(this)
-                        .setContentTitle("Forgot something?")
-                        .setContentText("Where is your child?")
-                        .setContentIntent(pIntent)
-                        .setSmallIcon(R.drawable.icon)
-//                        .addAction(action)
-                        .setAutoCancel(true).build();
+                if (status == ChildReminder.Status.CHILD_SITTING) {
+                    ((ChildReminder)getApplicationContext()).isAlert = true;
+                    Intent intent = new Intent(this, MainActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
 
-                NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-                notificationManager.notify(0, n);
+                    // Notify the user of missing child
+                    Notification n  = new Notification.Builder(this)
+                            .setContentTitle("Forgot something?")
+                            .setContentText("Where is your child?")
+                            .setContentIntent(pIntent)
+                            .setSmallIcon(R.drawable.icon)
+                            .setAutoCancel(true).build();
 
-                MediaPlayer player = MediaPlayer.create(this, R.raw.alarm);
-                player.setVolume(100,100);
+                    NotificationManager notificationManager = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+                    notificationManager.notify(0, n);
+
+                    // Alert sound
+                    MediaPlayer player = MediaPlayer.create(this, R.raw.alarm);
+                    player.setVolume(100,100);
 //                player.start();
+                }
             }
         }
 
@@ -171,7 +189,6 @@ public class MainService extends IntentService {
     }
 }
 
-// Start new intent of app's main activity
-//                Intent dialogIntent = new Intent(this, MainActivity.class);
-//                dialogIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-//                startActivity(dialogIntent);
+// Notification's button
+//                NotificationCompat.Action action = new NotificationCompat.Action.Builder(R.drawable.icon, "NO", pIntent).build();
+//                        .addAction(action)

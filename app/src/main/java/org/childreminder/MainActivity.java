@@ -1,17 +1,10 @@
 package org.childreminder;
 
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothManager;
-import android.bluetooth.le.BluetoothLeScanner;
-import android.bluetooth.le.ScanCallback;
-import android.bluetooth.le.ScanResult;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
-import android.os.ParcelUuid;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
@@ -19,61 +12,79 @@ import android.support.v7.widget.Toolbar;
 import android.view.View;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.widget.Button;
 import android.widget.TextView;
 
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.TimeZone;
+
 public class MainActivity extends AppCompatActivity {
-    private boolean isChildSitted = false;
-    int lastUpdated = 0;
-    boolean shouldDisableBT = false;
+    private BroadcastReceiver mReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            updateActivity();
+        }
+    };
 
-    private void startScan() {
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
 
-        BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
-        // scan for devices
-        scanner.startScan(new ScanCallback() {
-            @Override
-            public void onScanResult(int callbackType, ScanResult result) {
-                // get the discovered device as you wish
-                // this will trigger each time a new device is found
-
-                BluetoothDevice device = result.getDevice();
-                TextView tv1 = (TextView)findViewById(R.id.textView1);
-
-                String deviceName = device.getName();
-
-                if (deviceName != null && deviceName.equals("Child Reminder")) {
-                    if (result.getScanRecord().getBytes()[22] == 0) {
-                        tv1.setText("# Child is sitting in the car! " + Integer.toString(result.getRssi()));
-                    } else {
-                        tv1.setText("# No child is sitting in the car! " + Integer.toString(result.getRssi()));
-                    }
-                }
-            }
-        });
+        updateActivity();
     }
-//
-//    private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
-//        public void onReceive(Context context, Intent intent) {
-//            String action = intent.getAction();
-//
-//            if (BluetoothAdapter.ACTION_STATE_CHANGED.equals(action)) {
-//                final int bluetoothState = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR);
-//                switch (bluetoothState) {
-//                    case BluetoothAdapter.STATE_ON:
-//                        startScan();
-//                        break;
-//                }
-//            }
-//        }
-//    };
+
+    public void updateActivity() {
+        TextView lastUpdatedText = (TextView)findViewById(R.id.lastUpdated);
+        lastUpdatedText.setText(getDateCurrentTimeZone(((ChildReminder)getApplicationContext()).lastUpdated));
+
+        TextView statusText = (TextView)findViewById(R.id.status);
+        switch (((ChildReminder)getApplicationContext()).status) {
+            case NO_CONNECTION:
+                statusText.setText("No connection.");
+                break;
+            case NO_CHILD_SITTING:
+                statusText.setText("No child sitting.");
+                break;
+            case CHILD_SITTING:
+                statusText.setText("Child is sitting!");
+                break;
+        }
+
+        Button turnAlertOffButton = (Button)findViewById(R.id.turnAlertOffButton);
+        if (((ChildReminder) getApplicationContext()).isAlert) {
+            turnAlertOffButton.setVisibility(View.VISIBLE);
+        } else {
+            turnAlertOffButton.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    public  String getDateCurrentTimeZone(long timestamp) {
+        try{
+            Calendar calendar = Calendar.getInstance();
+            TimeZone tz = TimeZone.getDefault();
+            calendar.setTimeInMillis(timestamp - tz.getRawOffset());
+            calendar.add(Calendar.MILLISECOND, tz.getOffset(calendar.getTimeInMillis()));
+            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");
+            Date currentTimeZone = calendar.getTime();
+            return sdf.format(currentTimeZone);
+        }catch (Exception e) {
+        }
+        return "";
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        // Message handling - from service:
+
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(MainService.MY_ACTION);
+        registerReceiver(mReceiver, intentFilter);
+
         Intent mServiceIntent = new Intent(this, MainService.class);
-//        mServiceIntent.setData(Uri.parse(dataUrl));
         startService(mServiceIntent);
 
         setContentView(R.layout.activity_main);
@@ -89,32 +100,15 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        Intent intent = getIntent();
-        TextView tv1 = (TextView)findViewById(R.id.textView1);
-        tv1.setText(Long.toString(intent.getLongExtra("lastUpdated", 0)));
-//
-//        System.exit(1);
+        findViewById(R.id.turnAlertOffButton).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                ((ChildReminder)getApplicationContext()).isAlert = false;
+                updateActivity();
+            }
+        });
 
-//        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-//        if (mBluetoothAdapter != null) {
-//            IntentFilter filter = new IntentFilter();
-//
-//            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-//
-//            registerReceiver(mReceiver, filter);
-//
-//            if (mBluetoothAdapter.isEnabled()) {
-//                startScan();
-//            } else {
-//                shouldDisableBT = true;
-//                mBluetoothAdapter.enable();
-//            }
-//        } else {
-//            TextView tv1 = (TextView)findViewById(R.id.textView1);
-//            tv1.setText("NULL");
-//        }
-
-
+        updateActivity();
     }
 
     @Override
@@ -141,12 +135,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onDestroy() {
-//        // TODO: disable only if we enabled the BT
-//        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-//        mBluetoothAdapter.disable();
-//
-//        unregisterReceiver(mReceiver);
-
         super.onDestroy();
     }
 }
