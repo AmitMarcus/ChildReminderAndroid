@@ -52,6 +52,9 @@ public class MainActivity extends AppCompatActivity {
                 break;
         }
 
+        TextView rssiText = (TextView)findViewById(R.id.rssi);
+        rssiText.setText(Integer.toString(((ChildReminder)getApplicationContext()).lastRssi));
+
         Button turnAlertOffButton = (Button)findViewById(R.id.turnAlertOffButton);
         if (((ChildReminder) getApplicationContext()).isAlert) {
             turnAlertOffButton.setVisibility(View.VISIBLE);
@@ -81,7 +84,7 @@ public class MainActivity extends AppCompatActivity {
         // Message handling - from service:
 
         IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(MainService.MY_ACTION);
+        intentFilter.addAction(MainService.NOTIFY_CHANGE);
         registerReceiver(mReceiver, intentFilter);
 
         Intent mServiceIntent = new Intent(this, MainService.class);
