@@ -19,11 +19,15 @@ public class MainService extends IntentService {
     boolean shouldDisableBT = false;
 
     final static String NOTIFY_CHANGE = "NOTIFY_CHANGE";
+    final int TIME_OF_SCAN_IN_SEC = 5;
+    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 20 - TIME_OF_SCAN_IN_SEC;
+    final int RSSI_TOO_FAR = -90;
 
     public MainService() {
         super("MainService");
     }
 
+    // TODO: when BT on the receiver is TOCHEN the phone, maybe register and unregister every iteration of the main loop, or with a "should work" flag
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
@@ -69,39 +73,46 @@ public class MainService extends IntentService {
         }
     }
 
-    private void startScan() {
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+    private ScanCallback mScanCallback = new ScanCallback() {
+        @Override
+        public void onScanResult(int callbackType, ScanResult result) {
+            BluetoothDevice device = result.getDevice();
+            String deviceName = device.getName();
 
-        BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
-        // scan for devices
-        scanner.startScan(new ScanCallback() {
-            @Override
-            public void onScanResult(int callbackType, ScanResult result) {
-                BluetoothDevice device = result.getDevice();
+            if (deviceName != null && deviceName.equals("Child Reminder")) {
+                BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+                BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
+                // scan for devices
+                scanner.stopScan(mScanCallback);
 
                 if (shouldDisableBT) {
                     disableBT();
                 }
 
-                String deviceName = device.getName();
+                ((ChildReminder) getApplicationContext()).lastUpdated = System.currentTimeMillis();
 
-                if (deviceName != null && deviceName.equals("Child Reminder")) {
-                    ((ChildReminder)getApplicationContext()).lastUpdated = System.currentTimeMillis();
+                ((ChildReminder) getApplicationContext()).lastRssi = result.getRssi();
 
-                    ((ChildReminder)getApplicationContext()).lastRssi = result.getRssi();
-
-                    if (result.getScanRecord().getBytes()[22] == 0) {
-                        changeStatus(ChildReminder.Status.NO_CHILD_SITTING);
-                    } else {
-                        changeStatus(ChildReminder.Status.CHILD_SITTING);
-                    }
-
-                    Intent intent = new Intent();
-                    intent.setAction(NOTIFY_CHANGE);
-                    sendBroadcast(intent);
+                if (result.getScanRecord().getBytes()[22] == 1 && ((ChildReminder) getApplicationContext()).lastRssi > RSSI_TOO_FAR) {
+                    changeStatus(ChildReminder.Status.CHILD_SITTING);
+                } else {
+                    changeStatus(ChildReminder.Status.NO_CHILD_SITTING);
                 }
+
+                Intent intent = new Intent();
+                intent.setAction(NOTIFY_CHANGE);
+                sendBroadcast(intent);
             }
-        });
+        }
+    };
+
+    private void startScan() {
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+
+        BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
+        // scan for devices
+        scanner.startScan(mScanCallback);
     }
 
     private void disableBT() {
@@ -113,63 +124,66 @@ public class MainService extends IntentService {
     private void enableBTandStartScan() {
         BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (mBluetoothAdapter != null) {
-            IntentFilter filter = new IntentFilter();
-
-            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-
-            registerReceiver(mReceiver, filter);
-
             if (mBluetoothAdapter.isEnabled()) {
                 startScan();
             } else {
                 shouldDisableBT = true;
                 mBluetoothAdapter.enable();
             }
-        } else {
-            // TODO:
         }
-//
-//        try {
-//            Thread.sleep(2);
-//        } catch (InterruptedException e) {
-//            e.printStackTrace();
-//        }
-
-//         TODO: should check if already done from startScan...
-//        if (shouldDisableBT) {
-//            disableBT();
-//        }
     }
 
     @Override
     protected void onHandleIntent(Intent workIntent) {
+        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
+        if (mBluetoothAdapter != null) {
+            IntentFilter filter = new IntentFilter();
+
+            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+
+            registerReceiver(mReceiver, filter);
+        }
+
         changeStatus(ChildReminder.Status.NO_CONNECTION);
 
         while (true) {
             enableBTandStartScan();
 
             try {
-                Thread.sleep(10000);
+                Thread.sleep(TIME_OF_SCAN_IN_SEC * 1000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
 
-            // TODO: change time to > than sleep time (e.g. 15000)
-            if ((System.currentTimeMillis() - ((ChildReminder)getApplicationContext()).lastUpdated) > 15000) {
+            if (shouldDisableBT) {
+                disableBT();
+            }
+
+            if ((System.currentTimeMillis() - ((ChildReminder)getApplicationContext()).lastUpdated) > TIME_OF_SCAN_IN_SEC * 1.5 * 1000) {
                 if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING) {
                     alert();
                 }
 
                 changeStatus(ChildReminder.Status.NO_CONNECTION);
-            } else if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING && ((ChildReminder)getApplicationContext()).lastRssi < -60) {
+            } else if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING && ((ChildReminder)getApplicationContext()).lastRssi < RSSI_TOO_FAR) {
                 alert();
             } else {
                 ((ChildReminder)getApplicationContext()).isAlert = false;
             }
-        }
 
-        // TODO: move to destroy service if exist smtng like that
-//        unregisterReceiver(mReceiver);
+            try {
+                Thread.sleep(TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC * 1000);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+
+        unregisterReceiver(mReceiver);
     }
 
     public void alert() {
@@ -180,8 +194,8 @@ public class MainService extends IntentService {
 
         // Notify the user of missing child
         Notification n  = new Notification.Builder(this)
-                .setContentTitle("Forgot something?")
-                .setContentText("Where is your child?")
+                .setContentTitle("CHILD ALERT")
+                .setContentText("Is your child with you?")
                 .setContentIntent(pIntent)
                 .setSmallIcon(R.drawable.icon)
                 .setAutoCancel(true).build();
@@ -190,12 +204,8 @@ public class MainService extends IntentService {
         notificationManager.notify(0, n);
 
         // Alert sound
-        MediaPlayer player = MediaPlayer.create(this, R.raw.alarm);
-        player.setVolume(100,100);
-//                player.start();
+        ((ChildReminder)getApplicationContext()).player = MediaPlayer.create(this, R.raw.alarm);
+        ((ChildReminder)getApplicationContext()).player.setVolume(60,60);
+        ((ChildReminder)getApplicationContext()).player.start();
     }
 }
-
-// Notification's button
-//                NotificationCompat.Action action = new NotificationCompat.Action.Builder(R.drawable.icon, "NO", pIntent).build();
-//                        .addAction(action)
