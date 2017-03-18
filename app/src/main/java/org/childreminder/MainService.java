@@ -14,14 +14,15 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.media.MediaPlayer;
+import android.util.Log;
 
 public class MainService extends IntentService {
     boolean shouldDisableBT = false;
+    boolean isConnected = false;
 
     final static String NOTIFY_CHANGE = "NOTIFY_CHANGE";
     final int TIME_OF_SCAN_IN_SEC = 5;
-    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 20 - TIME_OF_SCAN_IN_SEC;
-    final int RSSI_TOO_FAR = -90;
+    final int RSSI_TOO_FAR = -50;
 
     public MainService() {
         super("MainService");
@@ -60,17 +61,17 @@ public class MainService extends IntentService {
     private void changeStatus(ChildReminder.Status status) {
         ((ChildReminder)getApplicationContext()).status = status;
 
-        switch (((ChildReminder)getApplicationContext()).status) {
-            case NO_CONNECTION:
-                goForeground("No connection.");
-                break;
-            case NO_CHILD_SITTING:
-                goForeground("No child is sitting in the car!");
-                break;
-            case CHILD_SITTING:
-                goForeground("Child is sitting in the car!");
-                break;
-        }
+//        switch (((ChildReminder)getApplicationContext()).status) {
+//            case NO_CONNECTION:
+//                goForeground("No connection.");
+//                break;
+//            case NO_CHILD_SITTING:
+//                goForeground("No child is sitting in the car!");
+//                break;
+//            case CHILD_SITTING:
+//                goForeground("Child is sitting in the car!");
+//                break;
+//        }
     }
 
     private ScanCallback mScanCallback = new ScanCallback() {
@@ -90,19 +91,16 @@ public class MainService extends IntentService {
                     disableBT();
                 }
 
-                ((ChildReminder) getApplicationContext()).lastUpdated = System.currentTimeMillis();
-
+                ((ChildReminder) getApplicationContext()).preLastRssi = ((ChildReminder) getApplicationContext()).lastRssi;
                 ((ChildReminder) getApplicationContext()).lastRssi = result.getRssi();
 
-                if (result.getScanRecord().getBytes()[22] == 1 && ((ChildReminder) getApplicationContext()).lastRssi > RSSI_TOO_FAR) {
+                if (result.getScanRecord().getBytes()[22] == 1) {
                     changeStatus(ChildReminder.Status.CHILD_SITTING);
                 } else {
                     changeStatus(ChildReminder.Status.NO_CHILD_SITTING);
                 }
 
-                Intent intent = new Intent();
-                intent.setAction(NOTIFY_CHANGE);
-                sendBroadcast(intent);
+                isConnected = true;
             }
         }
     };
@@ -135,55 +133,56 @@ public class MainService extends IntentService {
 
     @Override
     protected void onHandleIntent(Intent workIntent) {
+        Log.d("Service", "onHandleIntent");
+
+        isConnected = false;
+
         BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (mBluetoothAdapter != null) {
-            IntentFilter filter = new IntentFilter();
-
-            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-
-            registerReceiver(mReceiver, filter);
+        if (mBluetoothAdapter == null) {
+            return;
         }
 
-        changeStatus(ChildReminder.Status.NO_CONNECTION);
+        IntentFilter filter = new IntentFilter();
 
-        while (true) {
-            enableBTandStartScan();
+        filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
 
-            try {
-                Thread.sleep(TIME_OF_SCAN_IN_SEC * 1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        registerReceiver(mReceiver, filter);
 
-            if (shouldDisableBT) {
-                disableBT();
-            }
+//        changeStatus(ChildReminder.Status.NO_CONNECTION);
 
-            if ((System.currentTimeMillis() - ((ChildReminder)getApplicationContext()).lastUpdated) > TIME_OF_SCAN_IN_SEC * 1.5 * 1000) {
-                if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING) {
-                    alert();
-                }
+        enableBTandStartScan();
 
-                changeStatus(ChildReminder.Status.NO_CONNECTION);
-            } else if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING && ((ChildReminder)getApplicationContext()).lastRssi < RSSI_TOO_FAR) {
-                alert();
-            } else {
-                ((ChildReminder)getApplicationContext()).isAlert = false;
-            }
-
-            try {
-                Thread.sleep(TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC * 1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+        try {
+            Thread.sleep(TIME_OF_SCAN_IN_SEC * 1000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
         }
-    }
-
-    @Override
-    public void onDestroy() {
-        super.onDestroy();
 
         unregisterReceiver(mReceiver);
+
+        if (shouldDisableBT) {
+            disableBT();
+        }
+
+        if (!isConnected) {
+            if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING) {
+                alert();
+            }
+
+            changeStatus(ChildReminder.Status.NO_CONNECTION);
+        } else if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING &&
+                ((ChildReminder)getApplicationContext()).lastRssi < RSSI_TOO_FAR &&
+                ((ChildReminder)getApplicationContext()).preLastRssi >= RSSI_TOO_FAR) {
+            alert();
+        } else {
+            ((ChildReminder)getApplicationContext()).isAlert = false;
+        }
+
+        ((ChildReminder) getApplicationContext()).lastUpdated = System.currentTimeMillis();
+
+        Intent intent = new Intent();
+        intent.setAction(NOTIFY_CHANGE);
+        sendBroadcast(intent);
     }
 
     public void alert() {

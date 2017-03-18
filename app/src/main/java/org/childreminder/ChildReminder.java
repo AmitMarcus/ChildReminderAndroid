@@ -14,6 +14,7 @@ public class ChildReminder extends Application {
     public Status status = Status.NO_CONNECTION;
     public long lastUpdated = System.currentTimeMillis();
     public int lastRssi = 0;
+    public int preLastRssi = 0;
     public boolean isAlert = false;
     public MediaPlayer player;
 }

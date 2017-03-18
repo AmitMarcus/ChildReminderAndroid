@@ -1,17 +1,15 @@
 package org.childreminder;
 
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
-import android.support.design.widget.FloatingActionButton;
-import android.support.design.widget.Snackbar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.View;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.widget.Button;
 import android.widget.TextView;
 
@@ -21,6 +19,8 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class MainActivity extends AppCompatActivity {
+    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 20;
+
     private BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -104,6 +104,10 @@ public class MainActivity extends AppCompatActivity {
         });
 
         updateActivity();
+
+        // also set alarm
+        Context context = getApplicationContext();
+        setRecurringAlarm(context);
     }
 
 //    @Override
@@ -131,5 +135,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onDestroy() {
         super.onDestroy();
+    }
+
+    private void setRecurringAlarm(Context context) {
+        Intent intent = new Intent(context, MyBroadcastReceiver.class);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+        AlarmManager alarms = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
+        alarms.setRepeating(AlarmManager.RTC_WAKEUP, 0, TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC * 1000, pendingIntent);
     }
 }
