@@ -22,7 +22,7 @@ public class MainService extends IntentService {
 
     final static String NOTIFY_CHANGE = "NOTIFY_CHANGE";
     final int TIME_OF_SCAN_IN_SEC = 5;
-    final int RSSI_TOO_FAR = -50;
+    final int RSSI_TOO_FAR = -90;
 
     public MainService() {
         super("MainService");
@@ -147,8 +147,6 @@ public class MainService extends IntentService {
         filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
 
         registerReceiver(mReceiver, filter);
-
-//        changeStatus(ChildReminder.Status.NO_CONNECTION);
 
         enableBTandStartScan();
 
