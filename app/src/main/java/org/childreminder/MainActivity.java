@@ -1,7 +1,5 @@
 package org.childreminder;
 
-import android.app.AlarmManager;
-import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -19,8 +17,6 @@ import java.util.Date;
 import java.util.TimeZone;
 
 public class MainActivity extends AppCompatActivity {
-    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 20;
-
     private BroadcastReceiver mReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -35,12 +31,13 @@ public class MainActivity extends AppCompatActivity {
         updateActivity();
     }
 
+    // Updates the UI with updated information
     public void updateActivity() {
-        TextView lastUpdatedText = (TextView)findViewById(R.id.lastUpdated);
-        lastUpdatedText.setText(getDateCurrentTimeZone(((ChildReminder)getApplicationContext()).lastUpdated));
+        TextView lastUpdatedText = (TextView) findViewById(R.id.lastUpdated);
+        lastUpdatedText.setText(getDateCurrentTimeZone(((ChildReminder) getApplicationContext()).lastUpdated));
 
-        TextView statusText = (TextView)findViewById(R.id.status);
-        switch (((ChildReminder)getApplicationContext()).status) {
+        TextView statusText = (TextView) findViewById(R.id.status);
+        switch (((ChildReminder) getApplicationContext()).status) {
             case NO_CONNECTION:
                 statusText.setText("No connection.");
                 break;
@@ -52,10 +49,10 @@ public class MainActivity extends AppCompatActivity {
                 break;
         }
 
-        TextView rssiText = (TextView)findViewById(R.id.rssi);
-        rssiText.setText(Integer.toString(((ChildReminder)getApplicationContext()).lastRssi));
+        TextView rssiText = (TextView) findViewById(R.id.rssi);
+        rssiText.setText(Integer.toString(((ChildReminder) getApplicationContext()).lastRssi));
 
-        Button turnAlertOffButton = (Button)findViewById(R.id.turnAlertOffButton);
+        Button turnAlertOffButton = (Button) findViewById(R.id.turnAlertOffButton);
         if (((ChildReminder) getApplicationContext()).isAlert) {
             turnAlertOffButton.setVisibility(View.VISIBLE);
         } else {
@@ -63,8 +60,8 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    public  String getDateCurrentTimeZone(long timestamp) {
-        try{
+    public String getDateCurrentTimeZone(long timestamp) {
+        try {
             Calendar calendar = Calendar.getInstance();
             TimeZone tz = TimeZone.getDefault();
             calendar.setTimeInMillis(timestamp - tz.getRawOffset());
@@ -72,17 +69,17 @@ public class MainActivity extends AppCompatActivity {
             SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");
             Date currentTimeZone = calendar.getTime();
             return sdf.format(currentTimeZone);
-        }catch (Exception e) {
+        } catch (Exception e) {
         }
         return "";
     }
 
+    // Creates the UI & Runs the MainService
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         // Message handling - from service:
-
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(MainService.NOTIFY_CHANGE);
         registerReceiver(mReceiver, intentFilter);
@@ -97,50 +94,18 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.turnAlertOffButton).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                ((ChildReminder)getApplicationContext()).isAlert = false;
-                ((ChildReminder)getApplicationContext()).player.stop();
+                ((ChildReminder) getApplicationContext()).isAlert = false;
+                ((ChildReminder) getApplicationContext()).player.stop();
                 updateActivity();
             }
         });
 
         updateActivity();
-
-        // also set alarm
-        Context context = getApplicationContext();
-        setRecurringAlarm(context);
     }
-
-//    @Override
-//    public boolean onCreateOptionsMenu(Menu menu) {
-//        // Inflate the menu; this adds items to the action bar if it is present.
-//        getMenuInflater().inflate(R.menu.menu_main, menu);
-//        return true;
-//    }
-
-//    @Override
-//    public boolean onOptionsItemSelected(MenuItem item) {
-//        // Handle action bar item clicks here. The action bar will
-//        // automatically handle clicks on the Home/Up button, so long
-//        // as you specify a parent activity in AndroidManifest.xml.
-//        int id = item.getItemId();
-//
-//        //noinspection SimplifiableIfStatement
-//        if (id == R.id.action_settings) {
-//            return true;
-//        }
-//
-//        return super.onOptionsItemSelected(item);
-//    }
 
     @Override
     public void onDestroy() {
         super.onDestroy();
-    }
-
-    private void setRecurringAlarm(Context context) {
-        Intent intent = new Intent(context, MyBroadcastReceiver.class);
-        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
-        AlarmManager alarms = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
-        alarms.setRepeating(AlarmManager.RTC_WAKEUP, 0, TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC * 1000, pendingIntent);
+        unregisterReceiver(mReceiver);
     }
 }

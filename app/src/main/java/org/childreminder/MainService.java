@@ -1,5 +1,6 @@
 package org.childreminder;
 
+import android.app.AlarmManager;
 import android.app.IntentService;
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -21,14 +22,15 @@ public class MainService extends IntentService {
     boolean isConnected = false;
 
     final static String NOTIFY_CHANGE = "NOTIFY_CHANGE";
-    final int TIME_OF_SCAN_IN_SEC = 5;
+    final int TIME_OF_SCAN_IN_SEC = 2;
     final int RSSI_TOO_FAR = -90;
+    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 20;
 
     public MainService() {
         super("MainService");
     }
 
-    // TODO: when BT on the receiver is TOCHEN the phone, maybe register and unregister every iteration of the main loop, or with a "should work" flag
+    // Receiver for capturing BT state change to ON and start BLE scan
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
@@ -44,36 +46,11 @@ public class MainService extends IntentService {
         }
     };
 
-    private void goForeground(String msg) {
-        Intent notificationIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, 0);
-
-        Notification notification = new Notification.Builder(this)
-                .setContentTitle("Child Reminder Service")
-                .setContentText(msg)
-                .setSmallIcon(R.drawable.baby)
-                .setContentIntent(pendingIntent)
-                .build();
-
-        startForeground(1, notification);
-    }
-
     private void changeStatus(ChildReminder.Status status) {
         ((ChildReminder)getApplicationContext()).status = status;
-
-//        switch (((ChildReminder)getApplicationContext()).status) {
-//            case NO_CONNECTION:
-//                goForeground("No connection.");
-//                break;
-//            case NO_CHILD_SITTING:
-//                goForeground("No child is sitting in the car!");
-//                break;
-//            case CHILD_SITTING:
-//                goForeground("Child is sitting in the car!");
-//                break;
-//        }
     }
 
+    // Receiver for BLE scan result - if the result belong to our device, stop the scan and parse the results
     private ScanCallback mScanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
@@ -84,8 +61,10 @@ public class MainService extends IntentService {
                 BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
                 BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
-                // scan for devices
-                scanner.stopScan(mScanCallback);
+
+                if (null != scanner) {
+                    scanner.stopScan(mScanCallback);
+                }
 
                 if (shouldDisableBT) {
                     disableBT();
@@ -105,12 +84,15 @@ public class MainService extends IntentService {
         }
     };
 
+    // Start BLE scan
     private void startScan() {
         BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
         BluetoothLeScanner scanner = mBluetoothAdapter.getBluetoothLeScanner();
-        // scan for devices
-        scanner.startScan(mScanCallback);
+
+        if (null != scanner) {
+            scanner.startScan(mScanCallback);
+        }
     }
 
     private void disableBT() {
@@ -131,58 +113,79 @@ public class MainService extends IntentService {
         }
     }
 
+    // Set a recurring alarm to launch the service again in TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC
+    private void setRecurringAlarm() {
+        Context context = getApplicationContext();
+        Intent intent = new Intent(context, MainBroadcastReceiver.class);
+        intent.putExtra("alarmAlreadySet", true);
+        PendingIntent pendingIntent = PendingIntent.getBroadcast(context, 1234, intent, 0);
+
+        AlarmManager alarms = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
+        alarms.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC * 1000, pendingIntent);
+    }
+
     @Override
     protected void onHandleIntent(Intent workIntent) {
         Log.d("Service", "onHandleIntent");
 
-        isConnected = false;
-
-        BluetoothAdapter mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        if (mBluetoothAdapter == null) {
-            return;
-        }
-
-        IntentFilter filter = new IntentFilter();
-
-        filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
-
-        registerReceiver(mReceiver, filter);
-
-        enableBTandStartScan();
+        // Set next service launch
+        setRecurringAlarm();
 
         try {
+            isConnected = false;
+
+            // Register the receiver for BluetoothAdapter.ACTION_STATE_CHANGED
+            IntentFilter filter = new IntentFilter();
+            filter.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+            registerReceiver(mReceiver, filter);
+
+            enableBTandStartScan();
+
+            // Wait for scan to finish
             Thread.sleep(TIME_OF_SCAN_IN_SEC * 1000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }
 
-        unregisterReceiver(mReceiver);
-
-        if (shouldDisableBT) {
-            disableBT();
-        }
-
-        if (!isConnected) {
-            if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING) {
-                alert();
+            // Disable BT if needed
+            if (shouldDisableBT) {
+                disableBT();
             }
 
-            changeStatus(ChildReminder.Status.NO_CONNECTION);
-        } else if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING &&
-                ((ChildReminder)getApplicationContext()).lastRssi < RSSI_TOO_FAR &&
-                ((ChildReminder)getApplicationContext()).preLastRssi >= RSSI_TOO_FAR) {
-            alert();
-        } else {
-            ((ChildReminder)getApplicationContext()).isAlert = false;
+            // Unregister the receiver for BluetoothAdapter.ACTION_STATE_CHANGED
+            unregisterReceiver(mReceiver);
+
+            // Decided if need to change status and alert alert the user of a forgotten child
+            if (!isConnected) {
+                if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING) {
+                    alert();
+                }
+
+                changeStatus(ChildReminder.Status.NO_CONNECTION);
+            } else if (((ChildReminder)getApplicationContext()).status == ChildReminder.Status.CHILD_SITTING &&
+                    ((ChildReminder)getApplicationContext()).lastRssi < RSSI_TOO_FAR &&
+                    ((ChildReminder)getApplicationContext()).preLastRssi >= RSSI_TOO_FAR) {
+                alert();
+            } else {
+                ((ChildReminder)getApplicationContext()).isAlert = false;
+            }
+
+            // Update lastUpdated global
+            ((ChildReminder) getApplicationContext()).lastUpdated = System.currentTimeMillis();
+
+            // Notify the UI of new data
+            Intent intent = new Intent();
+            intent.setAction(NOTIFY_CHANGE);
+            sendBroadcast(intent);
+
+            // Try to disable BT again if failed
+            Thread.sleep(1000);
+            if (shouldDisableBT) {
+                disableBT();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-
-        ((ChildReminder) getApplicationContext()).lastUpdated = System.currentTimeMillis();
-
-        Intent intent = new Intent();
-        intent.setAction(NOTIFY_CHANGE);
-        sendBroadcast(intent);
     }
 
+    // Alerts the user by notification and sound alert
     public void alert() {
         ((ChildReminder)getApplicationContext()).isAlert = true;
         Intent intent = new Intent(this, MainActivity.class);

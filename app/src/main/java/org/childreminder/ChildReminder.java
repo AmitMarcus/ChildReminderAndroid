@@ -3,7 +3,6 @@ package org.childreminder;
 import android.app.Application;
 import android.media.MediaPlayer;
 
-
 public class ChildReminder extends Application {
     public enum Status {
         CHILD_SITTING,
@@ -11,6 +10,7 @@ public class ChildReminder extends Application {
         NO_CONNECTION
     }
 
+    // Globals for updating the intent from the service
     public Status status = Status.NO_CONNECTION;
     public long lastUpdated = System.currentTimeMillis();
     public int lastRssi = 0;
