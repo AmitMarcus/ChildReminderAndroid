@@ -24,7 +24,7 @@ public class MainService extends IntentService {
     final static String NOTIFY_CHANGE = "NOTIFY_CHANGE";
     final int TIME_OF_SCAN_IN_SEC = 2;
     final int RSSI_TOO_FAR = -90;
-    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 20;
+    final int TIME_TO_SLEEP_BETWEEN_ITERATIONS_IN_SEC = 10;
 
     public MainService() {
         super("MainService");

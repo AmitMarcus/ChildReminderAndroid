@@ -34,7 +34,7 @@ public class MainActivity extends AppCompatActivity {
     // Updates the UI with updated information
     public void updateActivity() {
         TextView lastUpdatedText = (TextView) findViewById(R.id.lastUpdated);
-        lastUpdatedText.setText(getDateCurrentTimeZone(((ChildReminder) getApplicationContext()).lastUpdated));
+        lastUpdatedText.setText((new SimpleDateFormat("HH:mm:ss dd/MM/yyyy")).format(((ChildReminder) getApplicationContext()).lastUpdated));
 
         TextView statusText = (TextView) findViewById(R.id.status);
         switch (((ChildReminder) getApplicationContext()).status) {
@@ -58,20 +58,6 @@ public class MainActivity extends AppCompatActivity {
         } else {
             turnAlertOffButton.setVisibility(View.INVISIBLE);
         }
-    }
-
-    public String getDateCurrentTimeZone(long timestamp) {
-        try {
-            Calendar calendar = Calendar.getInstance();
-            TimeZone tz = TimeZone.getDefault();
-            calendar.setTimeInMillis(timestamp - tz.getRawOffset());
-            calendar.add(Calendar.MILLISECOND, tz.getOffset(calendar.getTimeInMillis()));
-            SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss dd/MM/yyyy");
-            Date currentTimeZone = calendar.getTime();
-            return sdf.format(currentTimeZone);
-        } catch (Exception e) {
-        }
-        return "";
     }
 
     // Creates the UI & Runs the MainService

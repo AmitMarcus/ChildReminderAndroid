@@ -5,7 +5,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
-    <!--<uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED" />-->
 
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
 
@@ -34,6 +33,9 @@
         <receiver android:name=".MainBroadcastReceiver">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+
+            <intent-filter>
                 <action android:name=".receiver.AlarmReceiver" />
             </intent-filter>
         </receiver>
